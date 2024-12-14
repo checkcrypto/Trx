@@ -1,0 +1,5 @@
+mnemonic
+bip32utils
+eth-account
+requests
+python-telegram-bot
