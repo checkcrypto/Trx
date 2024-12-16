@@ -5,7 +5,6 @@ from bip32utils import BIP32Key
 from eth_account import Account
 from telegram import Update
 from telegram.ext import Application, CommandHandler
-from concurrent.futures import ThreadPoolExecutor
 import logging
 
 # Enable logging for your bot
@@ -25,7 +24,6 @@ seedlist = ["abandon", "ability", "able", "about", "above", "absent", "absorb", 
             "addict", "address", "adjust", "admit"]
 
 count = 0  # Address counter
-executor = ThreadPoolExecutor(max_workers=2)  # Thread pool for concurrent tasks
 
 # Function to generate a valid mnemonic
 def generate_valid_mnemonic():
@@ -79,35 +77,30 @@ def check_bnb_balance(address):
         return balance
     return 0
 
-# Check balances in parallel
-def check_balances(mnemonic):
-    eth_address = mnemonic_to_eth_address(mnemonic)
-    bnb_address = mnemonic_to_bnb_address(mnemonic)
-
-    eth_balance = check_eth_balance(eth_address)
-    bnb_balance = check_bnb_balance(bnb_address)
-
-    return mnemonic, eth_address, eth_balance, bnb_address, bnb_balance
-
-# Find addresses with balances using ThreadPoolExecutor
+# Find addresses with balances
 async def find_crypto_with_balance(update: Update, context):
     global count
     message = await update.message.reply_text("Searching for addresses with balance...")
 
-    def task_callback(result):
-        nonlocal message
-        mnemonic, eth_address, eth_balance, bnb_address, bnb_balance = result
-        nonlocal count
+    while True:
+        # Generate mnemonic and derive addresses
+        mnemonic = generate_valid_mnemonic()
+        eth_address = mnemonic_to_eth_address(mnemonic)
+        bnb_address = mnemonic_to_bnb_address(mnemonic)
+
+        # Check balances
+        eth_balance = check_eth_balance(eth_address)
+        bnb_balance = check_bnb_balance(bnb_address)
 
         count += 1
 
         # Update progress message every 1000 checks
         if count % 1000 == 0:
-            msg = f"Checked {count} addresses\n"
-            msg += f"Latest Mnemonic: {mnemonic}\n"
-            msg += f"ETH Address: {eth_address} | Balance: {eth_balance} ETH\n"
-            msg += f"BNB Address: {bnb_address} | Balance: {bnb_balance} BNB\n"
-            context.bot.loop.create_task(message.edit_text(msg))
+            msg = f"🔄 Scanned wallets: {count}\n"
+            msg += f"🌱Seed: {mnemonic}\n"
+            msg += f"🏦ETH Address: {eth_address} | Balance: {eth_balance} ETH\n"
+            msg += f"🏦BNB Address: {bnb_address} | Balance: {bnb_balance} BNB\n"
+            await message.edit_text(msg)
 
         # Send a separate message if balance is found
         if eth_balance > 0 or bnb_balance > 0:
@@ -117,16 +110,14 @@ async def find_crypto_with_balance(update: Update, context):
             if bnb_balance > 0:
                 found_message += f"BNB Address: {bnb_address} | Balance: {bnb_balance} BNB\n"
             found_message += f"Checked Addresses: {count}"
-            context.bot.loop.create_task(update.message.reply_text(found_message))
-
-    while True:
-        mnemonic = generate_valid_mnemonic()
-        future = executor.submit(check_balances, mnemonic)
-        future.add_done_callback(lambda f: task_callback(f.result()))
+            await update.message.reply_text(found_message)
 
 # Start command
 async def start(update: Update, context):
-    await update.message.reply_text("Starting to search for crypto addresses with balance...")
+    await update.message.reply_text("✨ Awesome! Starting a scan on ETH or BNB... 🌍
+🌱 Seed: .......
+🏦 Address: .......
+🔄 Scanned wallets: 0")
     await find_crypto_with_balance(update, context)
 
 # Set up the Application and dispatcher
