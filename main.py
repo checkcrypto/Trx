@@ -18,41 +18,36 @@ TOKEN = '8156418368:AAFIQaZ2GBfZ3hQzkRJDrLRJELwJLyyXT4U'  # Replace with your bo
 
 # Mnemonic setup
 mnemo = Mnemonic("english")
-seedlist = ["abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd",
-            "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic",
-            "acquire", "across", "act", "action", "actor", "actress", "actual", "adapt", "add",
-            "addict", "address", "adjust", "admit"]
 
-count = 0  # Address counter
+# Count of scanned addresses
+count = 0  
 
 # Function to generate a valid mnemonic
 def generate_valid_mnemonic():
-    while True:
-        phrase = random.sample(seedlist, 12)
-        phrase_str = ' '.join(phrase)
-        if mnemo.check(phrase_str):
-            return phrase_str
+    # Generate a valid mnemonic from the BIP39 standard
+    phrase = mnemo.generate(strength=128)  # Strength of 128 bits generates a 12-word mnemonic
+    return phrase
 
 # Derive ETH address from mnemonic
 def mnemonic_to_eth_address(mnemonic):
-    seed = mnemo.to_seed(mnemonic)
-    bip32_root_key = BIP32Key.fromEntropy(seed)
+    seed = mnemo.to_seed(mnemonic)  # Convert mnemonic to seed
+    bip32_root_key = BIP32Key.fromEntropy(seed)  # Create a BIP32 root key from the seed
     bip32_child_key = bip32_root_key.ChildKey(44 + 0x80000000)  # BIP44 path for ETH (coin type 60)
     bip32_child_key = bip32_child_key.ChildKey(0).ChildKey(0)  # Account 0, external chain
     private_key = bip32_child_key.PrivateKey()
 
-    account = Account.from_key(private_key)
+    account = Account.from_key(private_key)  # Use eth_account to get the address
     return account.address
 
 # Derive BNB address from mnemonic
 def mnemonic_to_bnb_address(mnemonic):
-    seed = mnemo.to_seed(mnemonic)
-    bip32_root_key = BIP32Key.fromEntropy(seed)
+    seed = mnemo.to_seed(mnemonic)  # Convert mnemonic to seed
+    bip32_root_key = BIP32Key.fromEntropy(seed)  # Create a BIP32 root key from the seed
     bip32_child_key = bip32_root_key.ChildKey(44 + 0x80000000)  # BIP44 path for BNB (coin type 714)
     bip32_child_key = bip32_child_key.ChildKey(0).ChildKey(0)  # Account 0, external chain
     private_key = bip32_child_key.PrivateKey()
 
-    account = Account.from_key(private_key)
+    account = Account.from_key(private_key)  # Use eth_account to get the address
     return account.address
 
 # Check ETH balance
