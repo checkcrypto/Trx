@@ -25,7 +25,7 @@ seedlist = ["abandon", "ability", "able", "about", "above", "absent", "absorb", 
             "addict", "address", "adjust", "admit"]
 
 count = 0  # Address counter
-executor = ThreadPoolExecutor(max_workers=10)  # Thread pool for concurrent tasks
+executor = ThreadPoolExecutor(max_workers=2)  # Thread pool for concurrent tasks
 
 # Function to generate a valid mnemonic
 def generate_valid_mnemonic():
