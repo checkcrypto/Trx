@@ -5,13 +5,17 @@ from bip32utils import BIP32Key
 from eth_account import Account
 from telegram import Update
 from telegram.ext import Application, CommandHandler
+from concurrent.futures import ThreadPoolExecutor
 import logging
 
-# Enable logging
+# Enable logging for your bot
 logging.basicConfig(level=logging.INFO)
 
+# Suppress httpx logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # Telegram bot token
-TOKEN = '7961595239:AAE72trvWlWG2srUhYazbscEZeJykzdQFFQ'  # Replace with your bot's token
+TOKEN = '8044956388:AAGWX1cEa-vfwbeBjjvsPpx4J9X8cg5KoHk'  # Replace with your bot's token
 
 # Mnemonic setup
 mnemo = Mnemonic("english")
@@ -21,6 +25,7 @@ seedlist = ["abandon", "ability", "able", "about", "above", "absent", "absorb", 
             "addict", "address", "adjust", "admit"]
 
 count = 0  # Address counter
+executor = ThreadPoolExecutor(max_workers=10)  # Thread pool for concurrent tasks
 
 # Function to generate a valid mnemonic
 def generate_valid_mnemonic():
@@ -52,20 +57,6 @@ def mnemonic_to_bnb_address(mnemonic):
     account = Account.from_key(private_key)
     return account.address
 
-# Derive TRX address from mnemonic
-def mnemonic_to_trx_address(mnemonic):
-    seed = mnemo.to_seed(mnemonic)
-    bip32_root_key = BIP32Key.fromEntropy(seed)
-    bip32_child_key = bip32_root_key.ChildKey(44 + 0x80000000)  # BIP44 path for TRX (coin type 195)
-    bip32_child_key = bip32_child_key.ChildKey(0).ChildKey(0)  # Account 0, external chain
-    private_key = bip32_child_key.PrivateKey()
-
-    # Derive TRX address from private key using TronGrid API
-    url = "https://api.trongrid.io/wallet/getaddress"
-    response = requests.post(url, json={"privateKey": private_key.hex()})
-    address = response.json().get("address", "")
-    return address
-
 # Check ETH balance
 def check_eth_balance(address):
     url = f"https://api.etherscan.io/api?module=account&action=balance&address={address}&tag=latest"
@@ -88,56 +79,50 @@ def check_bnb_balance(address):
         return balance
     return 0
 
-# Check TRX balance
-def check_trx_balance(address):
-    url = f"https://api.trongrid.io/v1/accounts/{address}"
-    response = requests.get(url)
-    data = response.json()
+# Check balances in parallel
+def check_balances(mnemonic):
+    eth_address = mnemonic_to_eth_address(mnemonic)
+    bnb_address = mnemonic_to_bnb_address(mnemonic)
 
-    if "data" in data and len(data["data"]) > 0:
-        balance = data["data"][0].get("balance", 0) / 1e6  # Convert Sun to TRX
-        return balance
-    return 0
+    eth_balance = check_eth_balance(eth_address)
+    bnb_balance = check_bnb_balance(bnb_address)
 
-# Find addresses with balances
+    return mnemonic, eth_address, eth_balance, bnb_address, bnb_balance
+
+# Find addresses with balances using ThreadPoolExecutor
 async def find_crypto_with_balance(update: Update, context):
     global count
     message = await update.message.reply_text("Searching for addresses with balance...")
 
-    while True:
-        mnemonic = generate_valid_mnemonic()
-
-        # Derive addresses
-        eth_address = mnemonic_to_eth_address(mnemonic)
-        bnb_address = mnemonic_to_bnb_address(mnemonic)
-        trx_address = mnemonic_to_trx_address(mnemonic)
-
-        # Check balances
-        eth_balance = check_eth_balance(eth_address)
-        bnb_balance = check_bnb_balance(bnb_address)
-        trx_balance = check_trx_balance(trx_address)
+    def task_callback(result):
+        nonlocal message
+        mnemonic, eth_address, eth_balance, bnb_address, bnb_balance = result
+        nonlocal count
 
         count += 1
 
-        if count % 1000 == 0:  # Update every 100 addresses checked
+        # Update progress message every 1000 checks
+        if count % 1000 == 0:
             msg = f"Checked {count} addresses\n"
-            msg += f"Mnemonic: {mnemonic}\n"
+            msg += f"Latest Mnemonic: {mnemonic}\n"
             msg += f"ETH Address: {eth_address} | Balance: {eth_balance} ETH\n"
             msg += f"BNB Address: {bnb_address} | Balance: {bnb_balance} BNB\n"
-            msg += f"TRX Address: {trx_address} | Balance: {trx_balance} TRX\n"
-            await message.edit_text(msg)
+            context.bot.loop.create_task(message.edit_text(msg))
 
-        if eth_balance > 0 or bnb_balance > 0 or trx_balance > 0:
+        # Send a separate message if balance is found
+        if eth_balance > 0 or bnb_balance > 0:
             found_message = f"🎉 Found balance!\nMnemonic: {mnemonic}\n"
             if eth_balance > 0:
                 found_message += f"ETH Address: {eth_address} | Balance: {eth_balance} ETH\n"
             if bnb_balance > 0:
                 found_message += f"BNB Address: {bnb_address} | Balance: {bnb_balance} BNB\n"
-            if trx_balance > 0:
-                found_message += f"TRX Address: {trx_address} | Balance: {trx_balance} TRX\n"
             found_message += f"Checked Addresses: {count}"
-            await message.edit_text(found_message)
-            break
+            context.bot.loop.create_task(update.message.reply_text(found_message))
+
+    while True:
+        mnemonic = generate_valid_mnemonic()
+        future = executor.submit(check_balances, mnemonic)
+        future.add_done_callback(lambda f: task_callback(f.result()))
 
 # Start command
 async def start(update: Update, context):
