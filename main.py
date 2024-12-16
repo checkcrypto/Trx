@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Telegram bot token
-TOKEN = '8044956388:AAGWX1cEa-vfwbeBjjvsPpx4J9X8cg5KoHk'  # Replace with your bot's token
+TOKEN = '8156418368:AAFIQaZ2GBfZ3hQzkRJDrLRJELwJLyyXT4U'  # Replace with your bot's token
 
 # Mnemonic setup
 mnemo = Mnemonic("english")
@@ -80,7 +80,12 @@ def check_bnb_balance(address):
 # Find addresses with balances
 async def find_crypto_with_balance(update: Update, context):
     global count
-    message = await update.message.reply_text("Searching for addresses with balance...")
+    message = await update.message.reply_text(
+        "✨ Awesome! Starting a scan on ETH or BNB... 🌍\n"
+        "🌱 Seed: .......\n"
+        "🏦 Address: .......\n"
+        "🔄 Scanned wallets: 0"
+        )
 
     while True:
         # Generate mnemonic and derive addresses
@@ -114,10 +119,7 @@ async def find_crypto_with_balance(update: Update, context):
 
 # Start command
 async def start(update: Update, context):
-    await update.message.reply_text("✨ Awesome! Starting a scan on ETH or BNB... 🌍
-🌱 Seed: .......
-🏦 Address: .......
-🔄 Scanned wallets: 0")
+    await update.message.reply_text("Searching for addresses with balance...")
     await find_crypto_with_balance(update, context)
 
 # Set up the Application and dispatcher
